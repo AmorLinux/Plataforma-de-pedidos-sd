@@ -9,7 +9,7 @@
 | MAX_TRABAJADORES y MAX_COLA | 8 y 16 (valores por defecto; `os.availableParallelism()` = 8) |
 | Duración de un reporte con n=2000000 | 701 ms de cálculo en el worker; 0,80 s de extremo a extremo |
 
-Cliente HTTP de las pruebas: `curl -w` (equivalente a la columna **Time** de Postman; no había interfaz gráfica en el entorno). Las cargas se lanzaron con `npx -y autocannon@8`. Docker en este equipo es Podman con el proveedor `docker-compose`.
+Cliente manual: **Bruno** (equivalente a Postman/Insomnia; local-first, sin cuenta ni inicio de sesión). Las cargas se lanzaron con `npx -y autocannon@8`. Docker en este equipo es Podman con el proveedor `docker-compose`.
 
 ## 1. Resultados
 
