@@ -3,6 +3,7 @@ import {randomUUID} from "node:crypto"
 import path from "node:path"
 import {Worker} from "node:worker_threads"
 import {contarPrimos} from "./primos"
+import {medirLatencia, resumenMetricas} from "./metricas"
 
 const PORT = Number(process.env.PORT ?? 3000);
 const INVENTARIO_URL = process.env.INVENTARIO_URL ?? "http://localhost:3001";
@@ -23,6 +24,13 @@ const pedidos:Pedido [] = [];
 const app = express();
 
 app.use(express.json());
+
+// Interceptor de métricas: debe ir después de express.json() y antes de las rutas.
+app.use(medirLatencia);
+
+app.get("/metricas", (req:Request, res:Response) => {
+    res.json(resumenMetricas());
+});
 
 function leerN(valor: unknown): number {
     const n = valor === undefined ? N_REPORTE_POR_DEFECTO : Number(valor);
