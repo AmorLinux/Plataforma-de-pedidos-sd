@@ -4,6 +4,7 @@ import path from "node:path"
 import {Worker} from "node:worker_threads"
 import {contarPrimos} from "./primos"
 import {medirLatencia, resumenMetricas} from "./metricas"
+import {contarPrimosEnPool, estadoPool, PoolLleno} from "./pool"
 
 const PORT = Number(process.env.PORT ?? 3000);
 const INVENTARIO_URL = process.env.INVENTARIO_URL ?? "http://localhost:3001";
@@ -83,6 +84,28 @@ app.get("/reporte/worker", (req:Request, res:Response) => {
             });
         }
     });
+});
+
+// El mismo reporte, pero con un número fijo de trabajadores y cola limitada.
+app.get("/reporte/pool", async (req:Request, res:Response) => {
+    let n: number;
+    try {
+        n = leerN(req.query.n);
+    } catch (error) {
+        res.status(400).json({ error: (error as Error).message });
+        return;
+    }
+    try {
+        const reporte = await contarPrimosEnPool(n);
+        res.json(reporte);
+    } catch (error) {
+        if (error instanceof PoolLleno) {
+            res.setHeader("Retry-After", "1");
+            res.status(503).json({ error: error.name, mensaje: error.message, pool: estadoPool() });
+            return;
+        }
+        res.status(500).json({ error: "el worker falló", detalle: (error as Error).message });
+    }
 });
 
 app.get("/health", (req:Request, res:Response) => {
