@@ -1,10 +1,15 @@
 import express, {Request, Response} from "express"
 import {randomUUID} from "node:crypto"
+import path from "node:path"
+import {Worker} from "node:worker_threads"
+import {contarPrimos} from "./primos"
 
 const PORT = Number(process.env.PORT ?? 3000);
 const INVENTARIO_URL = process.env.INVENTARIO_URL ?? "http://localhost:3001";
 const TIMEOUT_MS = Number(process.env.TIMEOUT_MS ?? 2000);
 const READINESS_TIMEOUT_MS = 1000;
+const N_REPORTE_POR_DEFECTO = 5_000_000;
+const N_REPORTE_MAXIMO = 50_000_000;
 
 interface Pedido{
     id:string;
@@ -18,6 +23,59 @@ const pedidos:Pedido [] = [];
 const app = express();
 
 app.use(express.json());
+
+function leerN(valor: unknown): number {
+    const n = valor === undefined ? N_REPORTE_POR_DEFECTO : Number(valor);
+    if (!Number.isInteger(n) || n < 0 || n > N_REPORTE_MAXIMO) {
+        throw new RangeError("n debe ser un entero entre 0 y " + N_REPORTE_MAXIMO);
+    }
+    return n;
+}
+
+// Reporte que congela el bucle de eventos mientras calcula (práctica guiada).
+app.get("/reporte/bloqueante", (req:Request, res:Response) => {
+    let n: number;
+    try {
+        n = leerN(req.query.n);
+    } catch (error) {
+        res.status(400).json({ error: (error as Error).message });
+        return;
+    }
+    const inicio = performance.now();
+    const primos = contarPrimos(n);
+    const ms = Math.round(performance.now() - inicio);
+    res.json({ modo: "bloqueante", n, primos, ms });
+});
+
+// El mismo reporte, pero en un hilo trabajador (práctica guiada).
+app.get("/reporte/worker", (req:Request, res:Response) => {
+    let n: number;
+    try {
+        n = leerN(req.query.n);
+    } catch (error) {
+        res.status(400).json({ error: (error as Error).message });
+        return;
+    }
+    const worker = new Worker(path.join(__dirname, "worker-reporte.js"), { workerData: n });
+    let respondido = false;
+    const responder = (fn: () => void) => {
+        if (!respondido) {
+            respondido = true;
+            fn();
+        }
+    };
+    worker.once("message", (reporte) => responder(() => res.json(reporte)));
+    worker.once("error", (error: Error) => responder(() => {
+        res.status(500).json({ error: "el worker falló", detalle: error.message });
+    }));
+    worker.once("exit", (codigo) => {
+        if (codigo !== 0) {
+            responder(() => {
+                res.status(500).json({ error: "el worker terminó con código " + codigo });
+            });
+        }
+    });
+});
 
 app.get("/health", (req:Request, res:Response) => {
     res.json({status: "ok", servicio: "pedidos"});
